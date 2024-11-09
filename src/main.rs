@@ -15,7 +15,6 @@ fn main() -> ! {
     // get handles to the hardware
     let peripherals = stm32f103::Peripherals::take().unwrap();
     let gpioa = &peripherals.GPIOA;
-    let gpioc = &peripherals.GPIOC;
     let rcc = &peripherals.RCC; // reset and clock control
 
     // enable GPIOA clock
@@ -24,20 +23,12 @@ fn main() -> ! {
     gpioa
         .crl
         .modify(|_, w| w.mode0().output().cnf0().push_pull());
-    // Set PA0 to low
-    gpioa.bsrr.write(|w| w.bs0().set_bit());
-
-    // enable the GPIO clock for IO port C
-    rcc.apb2enr.write(|w| w.iopcen().set_bit());
-    gpioc.crh.write(|w| {
-        w.mode13().bits(0b11);
-        w.cnf13().bits(0b00)
-    });
 
     loop {
-        gpioc.bsrr.write(|w| w.bs13().set_bit()); // set PC13 to low
+        gpioa.bsrr.write(|w| w.bs0().set_bit()); // set PA0 to high
         cortex_m::asm::delay(10000000);
-        gpioc.brr.write(|w| w.br13().set_bit()); // set PC13 to high
+
+        gpioa.bsrr.write(|w| w.br0().set_bit()); // set PA0 to low
         cortex_m::asm::delay(2000000);
     }
 }
