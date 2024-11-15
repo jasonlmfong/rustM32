@@ -13,9 +13,9 @@ lto = true
 # provides access to low level ARM CPU registers (used for delay)
 cortex-m = "0.7.7"
 # provides startup code for the ARM CPU
-cortex-m-rt = "0.7.3"
+cortex-m-rt = "0.7.5"
 # Gives us access to the STM32F1 registers
 stm32f1 = { version = "0.15.1", features = ["stm32f103", "rt"] }
 # provies a panic-handler (halting cpu)
 # (required when not using stdlib)
-panic-halt = "0.2.0"
+panic-halt = "1.0.0"
