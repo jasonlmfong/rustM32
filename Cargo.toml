@@ -21,3 +21,6 @@ stm32f1xx-hal = { version = "0.10.0", features = ["stm32f103", "rt"] }
 # provies a panic-handler (halting cpu)
 # (required when not using stdlib)
 panic-halt = "1.0.0"
+
+embedded-graphics = "0.8.1"
+sh1106 = "0.5.0"
