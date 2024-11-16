@@ -14,8 +14,10 @@ lto = true
 cortex-m = "0.7.7"
 # provides startup code for the ARM CPU
 cortex-m-rt = "0.7.5"
-# Gives us access to the STM32F1 registers
-stm32f1 = { version = "0.15.1", features = ["stm32f103", "rt"] }
+embedded-hal = "1.0.0"
+nb = "1.1.0"
+# HAL crate for STM32F1
+stm32f1xx-hal = { version = "0.10.0", features = ["stm32f103", "rt"] }
 # provies a panic-handler (halting cpu)
 # (required when not using stdlib)
 panic-halt = "1.0.0"
