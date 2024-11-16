@@ -1,70 +1,70 @@
 // std and main are not available for bare metal software
 #![no_std]
 #![no_main]
+// #![deny(unsafe_code)]
 
 extern crate cortex_m_rt;
 extern crate panic_halt;
-extern crate stm32f1;
 
 use cortex_m_rt::entry;
-use stm32f1::stm32f103;
+use nb::block;
+use stm32f1xx_hal::{pac, prelude::*, timer::Timer};
 
 // use `main` as the entry point of this application
 #[entry]
 fn main() -> ! {
-    // get handles to the hardware
-    let peripherals = stm32f103::Peripherals::take().unwrap();
-    let gpioa = &peripherals.GPIOA;
-    let gpiob = &peripherals.GPIOB;
-    let rcc = &peripherals.RCC; // reset and clock control
+    // Get access to the core peripherals from the cortex-m crate
+    let cp = cortex_m::Peripherals::take().unwrap();
+    // Get access to the device specific peripherals from the peripheral access crate
+    let dp = pac::Peripherals::take().unwrap();
 
-    // enable GPIOA and GPIOB clocks
-    rcc.apb2enr.modify(|_, w| {
-        w.iopaen().set_bit();
-        w.iopben().set_bit();
-        w
-    });
+    // Take ownership over the raw flash and rcc devices and convert them into the corresponding HAL structs
+    let mut flash = dp.FLASH.constrain();
+    let rcc = dp.RCC.constrain();
 
-    // Configure PA0 and PA2 as output (push-pull)
-    gpioa.crl.modify(|_, w| {
-        w.mode0().output().cnf0().push_pull(); // PA0
-        w.mode2().output().cnf2().push_pull(); // PA2
-        w // return modified writer
-    });
+    // Freeze the configuration of all the clocks in the system and store the frozen frequencies in `clocks`
+    let clocks = rcc.cfgr.freeze(&mut flash.acr);
 
-    // Configure PB1 and PB11 as input
-    gpiob.crl.modify(|_, w| w.mode1().input().cnf1().bits(0b01));
-    gpiob
-        .crh
-        .modify(|_, w| w.mode11().input().cnf11().bits(0b01));
+    // Configure GPIOA PA0 and PA2 as output (push-pull)
+    let mut gpioa = dp.GPIOA.split();
+    let mut led_a0 = gpioa.pa0.into_push_pull_output(&mut gpioa.crl);
+    let mut led_a2 = gpioa.pa2.into_push_pull_output(&mut gpioa.crl);
+
+    // Configure GPIOB PB1 and PB11 as input (float)
+    let mut gpiob = dp.GPIOB.split();
+    let button_b1 = gpiob.pb1.into_floating_input(&mut gpiob.crl);
+    let button_b11 = gpiob.pb11.into_floating_input(&mut gpiob.crh);
+
+    // Configure the syst timer to trigger an update every 0.1 second
+    let mut timer = Timer::syst(cp.SYST, &clocks).counter_hz();
+    timer.start(100.Hz()).unwrap();
 
     loop {
-        // read PB1
-        if gpiob.idr.read().idr1().bit_is_clear() {
-            cortex_m::asm::delay(2000);
-            while gpiob.idr.read().idr1().bit_is_clear() {} // do nothing while button is held down
-            cortex_m::asm::delay(2000);
+        block!(timer.wait()).unwrap();
 
-            if gpioa.odr.read().odr0().bit_is_clear() {
+        // read PB1
+        if button_b1.is_low() {
+            while button_b1.is_low() {} // do nothing while button is held down
+
+            if led_a0.is_set_low() {
                 // if PA0 is currently on
-                gpioa.bsrr.write(|w| w.bs0().set_bit()); // Set PA0 to high, turning it off
+                led_a0.set_high(); // Set PA0 to high, turning it off
             } else {
-                // if PA0 is currently of
-                gpioa.bsrr.write(|w| w.br0().set_bit()); // Set PA0 to low, turning it on
+                // if PA0 is currently off
+                led_a0.set_low(); // Set PA0 to low, turning it on
             }
         }
 
         // read PB11
-        if gpiob.idr.read().idr11().bit_is_clear() {
-            cortex_m::asm::delay(2000);
-            while gpiob.idr.read().idr11().bit_is_clear() {} // do nothing while button is held down
-            cortex_m::asm::delay(2000);
-            if gpioa.odr.read().odr2().bit_is_clear() {
+        if button_b11.is_low() {
+            while button_b11.is_low() {} // do nothing while button is held down
+
+            if led_a2.is_set_low() {
                 // if PA2 is currently on
-                gpioa.bsrr.write(|w| w.bs2().set_bit()); // Set PA2 to high, turning it off
+                led_a2.set_high(); // Set PA2 to high, turning it off
             } else {
                 // if PA2 is currently off
-                gpioa.bsrr.write(|w| w.br2().set_bit()); // Set PA2 to low, turning it on
+                led_a2.set_low(); // Set PA2 to low, turning it on
             }
         }
     }
