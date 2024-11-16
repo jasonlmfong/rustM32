@@ -8,7 +8,20 @@ extern crate panic_halt;
 
 use cortex_m_rt::entry;
 use nb::block;
-use stm32f1xx_hal::{pac, prelude::*, timer::Timer};
+use stm32f1xx_hal::{
+    i2c::{BlockingI2c, DutyCycle, Mode},
+    pac,
+    prelude::*,
+    timer::Timer,
+};
+
+use embedded_graphics::{
+    mono_font::{ascii::FONT_6X10, MonoTextStyle},
+    pixelcolor::BinaryColor,
+    prelude::*,
+    text::Text,
+};
+use sh1106::{prelude::*, Builder};
 
 // use `main` as the entry point of this application
 #[entry]
@@ -25,6 +38,8 @@ fn main() -> ! {
     // Freeze the configuration of all the clocks in the system and store the frozen frequencies in `clocks`
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
 
+    let mut afio = dp.AFIO.constrain();
+
     // Configure GPIOA PA0 and PA2 as output (push-pull)
     let mut gpioa = dp.GPIOA.split();
     let mut led_a0 = gpioa.pa0.into_push_pull_output(&mut gpioa.crl);
@@ -34,6 +49,36 @@ fn main() -> ! {
     let mut gpiob = dp.GPIOB.split();
     let button_b1 = gpiob.pb1.into_floating_input(&mut gpiob.crl);
     let button_b11 = gpiob.pb11.into_floating_input(&mut gpiob.crh);
+
+    let scl = gpiob.pb8.into_alternate_open_drain(&mut gpiob.crh);
+    let sda = gpiob.pb9.into_alternate_open_drain(&mut gpiob.crh);
+
+    let i2c = BlockingI2c::i2c1(
+        dp.I2C1,
+        (scl, sda),
+        &mut afio.mapr,
+        Mode::Fast {
+            frequency: 100.kHz().into(),
+            duty_cycle: DutyCycle::Ratio2to1,
+        },
+        clocks,
+        1000,
+        10,
+        1000,
+        1000,
+    );
+
+    let mut display: GraphicsMode<_> = Builder::new().connect_i2c(i2c).into();
+
+    display.init().unwrap();
+    display.flush().unwrap();
+
+    let style = MonoTextStyle::new(&FONT_6X10, BinaryColor::On);
+    Text::new("Hello world!", Point::zero(), style)
+        .draw(&mut display)
+        .unwrap();
+
+    display.flush().unwrap();
 
     // Configure the syst timer to trigger an update every 0.1 second
     let mut timer = Timer::syst(cp.SYST, &clocks).counter_hz();
@@ -46,26 +91,14 @@ fn main() -> ! {
         if button_b1.is_low() {
             while button_b1.is_low() {} // do nothing while button is held down
 
-            if led_a0.is_set_low() {
-                // if PA0 is currently on
-                led_a0.set_high(); // Set PA0 to high, turning it off
-            } else {
-                // if PA0 is currently off
-                led_a0.set_low(); // Set PA0 to low, turning it on
-            }
+            led_a0.toggle() // Set PA0 to the opposite state
         }
 
         // read PB11
         if button_b11.is_low() {
             while button_b11.is_low() {} // do nothing while button is held down
 
-            if led_a2.is_set_low() {
-                // if PA2 is currently on
-                led_a2.set_high(); // Set PA2 to high, turning it off
-            } else {
-                // if PA2 is currently off
-                led_a2.set_low(); // Set PA2 to low, turning it on
-            }
+            led_a2.toggle() // Set PA0 to the opposite state
         }
     }
 }
